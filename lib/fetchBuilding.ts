@@ -1,6 +1,5 @@
 import { Building } from "@/types";
 
-// Full Wikidata SPARQL query for a single building
 async function fetchFromWikidata(wikidataId: string): Promise<Partial<Building> | null> {
   const query = `
     SELECT ?item ?itemLabel ?architectLabel ?firmLabel ?inceptionDate ?styleLabel
@@ -47,7 +46,7 @@ async function fetchFromWikidata(wikidataId: string): Promise<Partial<Building> 
         Accept: "application/sparql-results+json",
         "User-Agent": "ValentinaArchitectureArchive/1.0",
       },
-      next: { revalidate: 3600 }, // cache 1 hour
+      next: { revalidate: 3600 },
     });
 
     if (!res.ok) return null;
@@ -55,7 +54,6 @@ async function fetchFromWikidata(wikidataId: string): Promise<Partial<Building> 
     const b = data.results?.bindings?.[0];
     if (!b) return null;
 
-    // Parse coords "Point(lng lat)" format
     let lat: number | undefined;
     let lng: number | undefined;
     if (b.coords?.value) {
@@ -66,19 +64,13 @@ async function fetchFromWikidata(wikidataId: string): Promise<Partial<Building> 
       }
     }
 
-    // Parse inception year
     let year_built: number | null = null;
     if (b.inceptionDate?.value) {
       const y = parseInt(b.inceptionDate.value.substring(0, 4));
       if (!isNaN(y)) year_built = y;
     }
 
-    // Parse image URL (convert Wikimedia filename to URL)
-    let imageUrl: string | null = null;
-    if (b.image?.value) {
-      // Wikidata returns the full commons URL directly
-      imageUrl = b.image.value;
-    }
+    const imageUrl: string | null = b.image?.value ?? null;
 
     const materials = b.materials?.value
       ? b.materials.value.split("|").filter(Boolean)
@@ -102,26 +94,20 @@ async function fetchFromWikidata(wikidataId: string): Promise<Partial<Building> 
       images: imageUrl
         ? [{ url: imageUrl, caption: null, credit: "Wikimedia Commons" }]
         : [],
-      sources: [
-        {
-          label: "Wikidata",
-          url: `https://www.wikidata.org/wiki/${wikidataId}`,
-        },
-      ],
+      sources: [{ label: "Wikidata", url: `https://www.wikidata.org/wiki/${wikidataId}` }],
     };
   } catch {
     return null;
   }
 }
 
-// Reverse geocode lat/lng to get a street address via Nominatim
 async function fetchAddress(lat: number, lng: number): Promise<{ address: string; city: string; country: string } | null> {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
       {
         headers: { "User-Agent": "ValentinaArchitectureArchive/1.0" },
-        next: { revalidate: 86400 }, // cache 24 hours
+        next: { revalidate: 86400 },
       }
     );
     if (!res.ok) return null;
@@ -140,12 +126,12 @@ async function fetchAddress(lat: number, lng: number): Promise<{ address: string
   }
 }
 
-// Main export — fetch a building by Wikidata ID
 export async function fetchBuilding(wikidataId: string): Promise<Building | null> {
+  console.log("fetchBuilding called with:", wikidataId);
   const wikidata = await fetchFromWikidata(wikidataId);
+  console.log("wikidata result:", wikidata?.name);
   if (!wikidata) return null;
 
-  // Get address from coordinates if we have them
   let address = "Address unknown";
   let city = "";
   let country = "";
@@ -187,7 +173,6 @@ export async function fetchBuilding(wikidataId: string): Promise<Building | null
   };
 }
 
-// Search Wikidata for buildings matching a query
 export async function searchBuildings(query: string): Promise<Array<{
   id: string;
   name: string;
@@ -195,7 +180,6 @@ export async function searchBuildings(query: string): Promise<Array<{
   architect: string | null;
   year: number | null;
 }>> {
-  // Use Wikidata's entity search API (faster than SPARQL for typeahead)
   const url = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&type=item&limit=10&format=json&origin=*`;
 
   try {
