@@ -31,7 +31,12 @@ export default function BuildingMap({
     if (!mapRef.current || mapInstanceRef.current) return;
 
     import("leaflet").then((L) => {
-      const map = L.map(mapRef.current!, {
+      if (mapInstanceRef.current) return;
+      const container = mapRef.current!;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((container as any)._leaflet_id) return;
+
+      const map = L.map(container, {
         center: [lat, lng],
         zoom: 16,
         zoomControl: true,
