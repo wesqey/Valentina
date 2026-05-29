@@ -31,6 +31,7 @@ export default function BuildingMap({
     if (!mapRef.current || mapInstanceRef.current) return;
 
     import("leaflet").then((L) => {
+      // Guard against StrictMode double-invoke
       if (mapInstanceRef.current) return;
       const container = mapRef.current!;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

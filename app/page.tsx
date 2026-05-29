@@ -5,9 +5,9 @@ import Link from "next/link";
 import Header from "@/components/Header";
 
 const FEATURED = [
-  { id: "seagram", name: "Seagram Building", address: "375 Park Ave, New York", architect: "Mies van der Rohe", year: 1958, style: "International Style" },
-  { id: "fallingwater", name: "Fallingwater", address: "Mill Run, Pennsylvania", architect: "Frank Lloyd Wright", year: 1939, style: "Organic Architecture" },
-  { id: "neue-nationalgalerie", name: "Neue Nationalgalerie", address: "Potsdamer Straße 50, Berlin", architect: "Mies van der Rohe", year: 1968, style: "International Style" },
+  { id: "Q641483", name: "Seagram Building", address: "375 Park Ave, New York", architect: "Mies van der Rohe", year: 1958, style: "International Style" },
+  { id: "Q193641", name: "Fallingwater", address: "Mill Run, Pennsylvania", architect: "Frank Lloyd Wright", year: 1939, style: "Organic Architecture" },
+  { id: "Q320176", name: "Neue Nationalgalerie", address: "Potsdamer Straße 50, Berlin", architect: "Mies van der Rohe", year: 1968, style: "International Style" },
 ];
 
 export default function HomePage() {

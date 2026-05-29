@@ -1,58 +1,14 @@
-"use client";
-
+import React from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import Header from "@/components/Header";
-import { Building } from "@/types";
-import { use } from "react";
-
-const BuildingMap = dynamic(() => import("@/components/BuildingMap"), {
-  ssr: false,
-});
+import MapWrapper from "@/components/MapWrapper";
+import { fetchBuilding } from "@/lib/fetchBuilding";
+import { notFound } from "next/navigation";
 
 const NEARBY_BUILDINGS = [
   { id: "nearby-1", name: "Lever House", address: "390 Park Avenue", lat: 40.7601, lng: -73.9719 },
   { id: "nearby-2", name: "Racquet and Tennis Club", address: "370 Park Avenue", lat: 40.757, lng: -73.9735 },
 ];
-
-const MOCK_BUILDINGS: Record<string, Building> = {
-  seagram: {
-    id: "seagram",
-    name: "Seagram Building",
-    address: "375 Park Avenue",
-    city: "New York",
-    country: "US",
-    lat: 40.7583,
-    lng: -73.9728,
-    year_built: 1958,
-    year_demolished: null,
-    architect: "Ludwig Mies van der Rohe",
-    firm: "Mies van der Rohe & Philip Johnson",
-    style: "International Style",
-    height_m: 156.7,
-    floors: 38,
-    use_type: "Commercial",
-    materials: ["Bronze", "Glass", "Travertine"],
-    description:
-      "A landmark of the International Style, the Seagram Building set the standard for corporate skyscrapers. Mies van der Rohe's use of bronze-clad curtain wall, floor-to-ceiling glass, and the raised plaza on Park Avenue created a model that influenced office building design for decades. The building is recessed from the street, creating a public plaza — a then-radical gesture that shaped New York's zoning laws.",
-    osm_id: "way/362225005",
-    wikidata_id: "Q641483",
-    verified: true,
-    images: [
-      {
-        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/SeagramBuilding.jpg/800px-SeagramBuilding.jpg",
-        caption: "South facade on Park Avenue",
-        credit: "Wikimedia Commons",
-      },
-    ],
-    sources: [
-      { label: "Wikidata", url: "https://www.wikidata.org/wiki/Q641483" },
-      { label: "AIA Guide to New York City", url: null },
-    ],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-};
 
 const externalLinkStyle: React.CSSProperties = {
   fontSize: "9px",
@@ -65,16 +21,17 @@ const externalLinkStyle: React.CSSProperties = {
   transition: "border-color 0.2s",
 };
 
-export default function BuildingPage({
+export default async function BuildingPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = use(params);
-  const building = MOCK_BUILDINGS[id] ?? MOCK_BUILDINGS["seagram"];
-  const nearby = NEARBY_BUILDINGS;
+  const { id } = await params;
+  const building = await fetchBuilding(id);
+  if (!building) notFound();
 
-  if (!building) return null;
+  // Only show nearby for now if we're in New York
+  const nearby = building.city === "New York" ? NEARBY_BUILDINGS : [];
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
@@ -110,9 +67,7 @@ export default function BuildingPage({
               )}
               <Link
                 href={`/building/${building.id}/edit`}
-                style={{ fontSize: "9px", letterSpacing: "0.1em", padding: "6px 12px", border: "1px solid var(--border)", color: "var(--text)", textDecoration: "none", transition: "border-color 0.2s" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--text-muted)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; }}
+                style={{ fontSize: "9px", letterSpacing: "0.1em", padding: "6px 12px", border: "1px solid var(--border)", color: "var(--text)", textDecoration: "none" }}
               >
                 EDIT
               </Link>
@@ -146,6 +101,7 @@ export default function BuildingPage({
                 ))}
             </div>
 
+            {/* Sources */}
             {building.sources && building.sources.length > 0 && (
               <div style={{ marginTop: "40px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "0.2em", color: "var(--text-dim)", marginBottom: "16px" }}>SOURCES</div>
@@ -165,12 +121,17 @@ export default function BuildingPage({
               </div>
             )}
 
+            {/* External links */}
             <div style={{ marginTop: "32px", display: "flex", gap: "12px" }}>
               {building.wikidata_id && (
-                <a href={`https://www.wikidata.org/wiki/${building.wikidata_id}`} target="_blank" rel="noreferrer" style={externalLinkStyle}>WIKIDATA ↗</a>
+                <a href={`https://www.wikidata.org/wiki/${building.wikidata_id}`} target="_blank" rel="noreferrer" style={externalLinkStyle}>
+                  WIKIDATA ↗
+                </a>
               )}
               {building.osm_id && (
-                <a href={`https://www.openstreetmap.org/${building.osm_id}`} target="_blank" rel="noreferrer" style={externalLinkStyle}>OPENSTREETMAP ↗</a>
+                <a href={`https://www.openstreetmap.org/${building.osm_id}`} target="_blank" rel="noreferrer" style={externalLinkStyle}>
+                  OPENSTREETMAP ↗
+                </a>
               )}
             </div>
           </div>
@@ -178,10 +139,18 @@ export default function BuildingPage({
           {/* Right: Map */}
           <div>
             <div style={{ fontSize: "9px", letterSpacing: "0.2em", color: "var(--text-dim)", marginBottom: "24px" }}>LOCATION</div>
-            <BuildingMap lat={building.lat} lng={building.lng} name={building.name} nearbyBuildings={nearby} height="360px" />
-            <div style={{ marginTop: "12px", fontSize: "9px", letterSpacing: "0.08em", color: "var(--text-dim)" }}>
-              {building.lat.toFixed(6)}, {building.lng.toFixed(6)}
-            </div>
+            {building.lat !== 0 && building.lng !== 0 ? (
+              <>
+                <MapWrapper lat={building.lat} lng={building.lng} name={building.name} nearbyBuildings={nearby} height="360px" />
+                <div style={{ marginTop: "12px", fontSize: "9px", letterSpacing: "0.08em", color: "var(--text-dim)" }}>
+                  {building.lat.toFixed(6)}, {building.lng.toFixed(6)}
+                </div>
+              </>
+            ) : (
+              <div style={{ height: "360px", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", letterSpacing: "0.15em", color: "var(--text-dim)" }}>
+                NO COORDINATES
+              </div>
+            )}
 
             {nearby.length > 0 && (
               <div style={{ marginTop: "32px" }}>
@@ -191,9 +160,7 @@ export default function BuildingPage({
                     <Link
                       key={b.id}
                       href={`/building/${b.id}`}
-                      style={{ display: "block", padding: "12px 0", borderBottom: "1px solid var(--border-dim)", textDecoration: "none", color: "var(--text)", fontSize: "11px", letterSpacing: "0.04em", transition: "color 0.2s" }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text)"; }}
+                      style={{ display: "block", padding: "12px 0", borderBottom: "1px solid var(--border-dim)", textDecoration: "none", color: "var(--text)", fontSize: "11px", letterSpacing: "0.04em" }}
                     >
                       {b.name ?? b.address}
                     </Link>
@@ -244,9 +211,7 @@ export default function BuildingPage({
           </div>
           <Link
             href={`/building/${building.id}/edit`}
-            style={{ fontSize: "10px", letterSpacing: "0.12em", padding: "12px 28px", border: "1px solid var(--border)", color: "var(--text)", textDecoration: "none", transition: "border-color 0.2s", display: "inline-block" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--text-muted)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; }}
+            style={{ fontSize: "10px", letterSpacing: "0.12em", padding: "12px 28px", border: "1px solid var(--border)", color: "var(--text)", textDecoration: "none", display: "inline-block" }}
           >
             EDIT RECORD
           </Link>
