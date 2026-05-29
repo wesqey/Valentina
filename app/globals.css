@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #ffffff;
+  --text: #000000;
+  --text-muted: #666666;
+  --text-dim: #999999;
+  --border: #e5e5e5;
+  --border-dim: #f5f5f5;
+  --bg-alt: #fafafa;
+}
+
+[data-theme="dark"] {
+  --bg: #000000;
+  --text: #ffffff;
+  --text-muted: #999999;
+  --text-dim: #666666;
+  --border: #333333;
+  --border-dim: #1a1a1a;
+  --bg-alt: #0a0a0a;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+/* Leaflet overrides for CARLISLE aesthetic */
+.leaflet-container {
+  background: var(--bg-alt);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.leaflet-control-zoom a {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--text) !important;
+  background: var(--bg) !important;
+  border-color: var(--border) !important;
+}
+
+.leaflet-control-attribution {
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  background: var(--bg) !important;
+  color: var(--text-dim) !important;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 0;
+  border: 1px solid var(--border);
+  box-shadow: none;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.leaflet-popup-tip {
+  background: var(--bg);
+}
