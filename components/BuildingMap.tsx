@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { Map } from "leaflet";
 
 interface MapProps {
   lat: number;
@@ -24,14 +25,12 @@ export default function BuildingMap({
   height = "400px",
 }: MapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<ReturnType<typeof import("leaflet")["map"]> | null>(null);
+  const mapInstanceRef = useRef<Map | null>(null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
-    // Dynamic import — Leaflet is browser-only
     import("leaflet").then((L) => {
-      // CartoDB Positron — monochrome, minimal, fits CARLISLE palette perfectly
       const map = L.map(mapRef.current!, {
         center: [lat, lng],
         zoom: 16,
@@ -51,46 +50,31 @@ export default function BuildingMap({
         }
       ).addTo(map);
 
-      // Custom minimal marker
       const primaryIcon = L.divIcon({
         className: "",
-        html: `<div style="
-          width: 10px;
-          height: 10px;
-          background: #000;
-          border: 2px solid #fff;
-          box-shadow: 0 0 0 1px #000;
-        "></div>`,
+        html: `<div style="width:10px;height:10px;background:#000;border:2px solid #fff;box-shadow:0 0 0 1px #000;"></div>`,
         iconSize: [10, 10],
         iconAnchor: [5, 5],
       });
 
       const secondaryIcon = L.divIcon({
         className: "",
-        html: `<div style="
-          width: 6px;
-          height: 6px;
-          background: #999;
-          border: 1px solid #fff;
-          box-shadow: 0 0 0 1px #ccc;
-        "></div>`,
+        html: `<div style="width:6px;height:6px;background:#999;border:1px solid #fff;box-shadow:0 0 0 1px #ccc;"></div>`,
         iconSize: [6, 6],
         iconAnchor: [3, 3],
       });
 
-      // Main building marker
       L.marker([lat, lng], { icon: primaryIcon })
         .addTo(map)
-        .bindPopup(name || "Building")
+        .bindPopup(name ?? "Building")
         .openPopup();
 
-      // Nearby buildings
       nearbyBuildings.forEach((b) => {
         if (b.lat === lat && b.lng === lng) return;
         L.marker([b.lat, b.lng], { icon: secondaryIcon })
           .addTo(map)
           .bindPopup(
-            `<a href="/building/${b.id}" style="color:#000;text-decoration:none;letter-spacing:0.05em">${b.name || b.address}</a>`
+            `<a href="/building/${b.id}" style="color:#000;text-decoration:none;letter-spacing:0.05em">${b.name ?? b.address}</a>`
           );
       });
     });

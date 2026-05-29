@@ -17,7 +17,6 @@ export default function Header() {
         alignItems: "flex-start",
       }}
     >
-      {/* Wordmark */}
       <Link href="/" style={{ textDecoration: "none" }}>
         <div
           style={{
@@ -28,12 +27,8 @@ export default function Header() {
             marginBottom: "6px",
             transition: "opacity 0.2s",
           }}
-          onMouseEnter={(e) =>
-            ((e.target as HTMLElement).style.opacity = "0.5")
-          }
-          onMouseLeave={(e) =>
-            ((e.target as HTMLElement).style.opacity = "1")
-          }
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.5"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
         >
           VALENTINA
         </div>
@@ -49,33 +44,15 @@ export default function Header() {
         </div>
       </Link>
 
-      {/* Nav */}
-      <nav
-        style={{
-          display: "flex",
-          gap: "28px",
-          alignItems: "center",
-          paddingTop: "4px",
-        }}
-      >
-        <Link href="/map" style={navStyle}>
-          MAP
-        </Link>
-        <Link href="/contribute" style={navStyle}>
-          CONTRIBUTE
-        </Link>
-        <Link href="/about" style={navStyle}>
-          ABOUT
-        </Link>
+      <nav style={{ display: "flex", gap: "28px", alignItems: "center", paddingTop: "4px" }}>
+        <Link href="/map" style={navStyle}>MAP</Link>
+        <Link href="/contribute" style={navStyle}>CONTRIBUTE</Link>
+        <Link href="/about" style={navStyle}>ABOUT</Link>
 
-        {/* Search */}
         <div style={{ position: "relative" }}>
           <button
             onClick={() => setSearchOpen(!searchOpen)}
-            style={{
-              ...navButtonStyle,
-              color: searchOpen ? "var(--text)" : "var(--text-muted)",
-            }}
+            style={{ ...navButtonStyle, color: searchOpen ? "var(--text)" : "var(--text-muted)" }}
           >
             SEARCH
           </button>
@@ -84,11 +61,7 @@ export default function Header() {
             <>
               <div
                 onClick={() => setSearchOpen(false)}
-                style={{
-                  position: "fixed",
-                  inset: 0,
-                  zIndex: 98,
-                }}
+                style={{ position: "fixed", inset: 0, zIndex: 98 }}
               />
               <div
                 style={{
