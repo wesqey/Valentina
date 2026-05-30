@@ -5,10 +5,7 @@ import MapWrapper from "@/components/MapWrapper";
 import { fetchBuilding } from "@/lib/fetchBuilding";
 import { notFound } from "next/navigation";
 
-const NEARBY_BUILDINGS = [
-  { id: "nearby-1", name: "Lever House", address: "390 Park Avenue", lat: 40.7601, lng: -73.9719 },
-  { id: "nearby-2", name: "Racquet and Tennis Club", address: "370 Park Avenue", lat: 40.757, lng: -73.9735 },
-];
+const NEARBY_BUILDINGS: Array<{ id: string; name: string; address: string; lat: number; lng: number }> = [];
 
 const externalLinkStyle: React.CSSProperties = {
   fontSize: "9px",
@@ -18,8 +15,25 @@ const externalLinkStyle: React.CSSProperties = {
   color: "var(--text-muted)",
   textDecoration: "none",
   display: "inline-block",
-  transition: "border-color 0.2s",
 };
+
+function FactRow({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: "20px", padding: "14px 0", borderBottom: "1px solid var(--border-dim)" }}>
+      <div style={{ fontSize: "9px", letterSpacing: "0.12em", color: "var(--text-dim)", paddingTop: "1px" }}>{label}</div>
+      <div style={{ fontSize: "12px", letterSpacing: "0.03em", color: "var(--text)", fontWeight: 300 }}>{value}</div>
+    </div>
+  );
+}
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <div style={{ fontSize: "9px", letterSpacing: "0.2em", color: "var(--text-dim)", marginBottom: "4px", marginTop: "32px", paddingBottom: "10px", borderBottom: "1px solid var(--border)" }}>
+      {title}
+    </div>
+  );
+}
 
 export default async function BuildingPage({
   params,
@@ -30,8 +44,7 @@ export default async function BuildingPage({
   const building = await fetchBuilding(id);
   if (!building) notFound();
 
-  // Only show nearby for now if we're in New York
-  const nearby = building.city === "New York" ? NEARBY_BUILDINGS : [];
+  const nearby = NEARBY_BUILDINGS;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
@@ -42,12 +55,12 @@ export default async function BuildingPage({
         <div style={{ fontSize: "9px", letterSpacing: "0.15em", color: "var(--text-dim)", marginBottom: "40px", display: "flex", gap: "16px", alignItems: "center" }}>
           <Link href="/" style={{ color: "var(--text-dim)", textDecoration: "none" }}>VALENTINA</Link>
           <span>—</span>
-          <span>{building.city.toUpperCase()}</span>
-          <span>—</span>
+          {building.city && <span>{building.city.toUpperCase()}</span>}
+          {building.city && <span>—</span>}
           <span style={{ color: "var(--text-muted)" }}>{(building.name ?? building.address).toUpperCase()}</span>
         </div>
 
-        {/* Title block */}
+        {/* Title */}
         <div style={{ borderBottom: "1px solid var(--border)", paddingBottom: "40px", marginBottom: "60px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "40px", flexWrap: "wrap" }}>
             <div>
@@ -55,20 +68,14 @@ export default async function BuildingPage({
                 {building.name ?? building.address}
               </h1>
               <div style={{ fontSize: "12px", letterSpacing: "0.08em", color: "var(--text-muted)" }}>
-                {building.address}, {building.city}, {building.country}
+                {[building.address, building.city, building.country].filter(Boolean).join(", ")}
               </div>
             </div>
-
             <div style={{ display: "flex", gap: "12px", flexShrink: 0 }}>
               {building.verified && (
-                <span style={{ fontSize: "9px", letterSpacing: "0.1em", padding: "6px 12px", border: "1px solid var(--border)", color: "var(--text-dim)" }}>
-                  VERIFIED
-                </span>
+                <span style={{ fontSize: "9px", letterSpacing: "0.1em", padding: "6px 12px", border: "1px solid var(--border)", color: "var(--text-dim)" }}>VERIFIED</span>
               )}
-              <Link
-                href={`/building/${building.id}/edit`}
-                style={{ fontSize: "9px", letterSpacing: "0.1em", padding: "6px 12px", border: "1px solid var(--border)", color: "var(--text)", textDecoration: "none" }}
-              >
+              <Link href={`/building/${building.id}/edit`} style={{ fontSize: "9px", letterSpacing: "0.1em", padding: "6px 12px", border: "1px solid var(--border)", color: "var(--text)", textDecoration: "none" }}>
                 EDIT
               </Link>
             </div>
@@ -77,35 +84,62 @@ export default async function BuildingPage({
 
         {/* Two-column layout */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "80px", marginBottom: "80px" }}>
-          {/* Left: Key facts */}
+
+          {/* Left: All facts */}
           <div>
-            <div style={{ fontSize: "9px", letterSpacing: "0.2em", color: "var(--text-dim)", marginBottom: "24px" }}>KEY FACTS</div>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              {[
-                { label: "ARCHITECT", value: building.architect },
-                { label: "FIRM", value: building.firm },
-                { label: "YEAR BUILT", value: building.year_built?.toString() },
-                { label: "YEAR DEMOLISHED", value: building.year_demolished?.toString() },
-                { label: "STYLE", value: building.style },
-                { label: "HEIGHT", value: building.height_m ? `${building.height_m} m` : null },
-                { label: "FLOORS", value: building.floors?.toString() },
-                { label: "USE", value: building.use_type },
-                { label: "MATERIALS", value: building.materials?.join(", ") },
-              ]
-                .filter((f) => f.value)
-                .map(({ label, value }) => (
-                  <div key={label} style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: "20px", padding: "14px 0", borderBottom: "1px solid var(--border-dim)" }}>
-                    <div style={{ fontSize: "9px", letterSpacing: "0.12em", color: "var(--text-dim)", paddingTop: "1px" }}>{label}</div>
-                    <div style={{ fontSize: "12px", letterSpacing: "0.03em", color: "var(--text)", fontWeight: 300 }}>{value}</div>
+            <SectionHeader title="IDENTITY" />
+            <FactRow label="ARCHITECT" value={building.architect} />
+            <FactRow label="FIRM" value={building.firm} />
+            <FactRow label="YEAR BUILT" value={building.year_built?.toString()} />
+            <FactRow label="YEAR DEMOLISHED" value={building.year_demolished?.toString()} />
+            <FactRow label="STYLE" value={building.style} />
+            <FactRow label="MOVEMENT" value={building.movement} />
+            <FactRow label="USE" value={building.use_type} />
+
+            <SectionHeader title="PHYSICAL" />
+            <FactRow label="HEIGHT" value={building.height_m ? `${building.height_m} m` : null} />
+            <FactRow label="FLOORS" value={building.floors?.toString()} />
+            <FactRow label="FLOOR AREA" value={building.floor_area_m2 ? `${building.floor_area_m2.toLocaleString()} m²` : null} />
+            <FactRow label="SITE AREA" value={building.site_area_m2 ? `${building.site_area_m2.toLocaleString()} m²` : null} />
+            <FactRow label="UNITS" value={building.units?.toString()} />
+            <FactRow label="STRUCTURAL SYSTEM" value={building.structural_system} />
+            <FactRow label="MATERIALS" value={building.materials?.join(", ")} />
+
+            <SectionHeader title="SUSTAINABILITY" />
+            <FactRow label="LEED RATING" value={building.leed_rating} />
+            <FactRow label="BREEAM RATING" value={building.breeam_rating} />
+            <FactRow label="ENERGY RATING" value={building.energy_rating} />
+            <FactRow label="CARBON FOOTPRINT" value={building.carbon_footprint} />
+            {building.sustainability_notes && (
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--border-dim)", fontSize: "11px", letterSpacing: "0.02em", color: "var(--text-muted)", lineHeight: 1.7 }}>
+                {building.sustainability_notes}
+              </div>
+            )}
+
+            <SectionHeader title="RECOGNITION" />
+            <FactRow label="HERITAGE STATUS" value={building.heritage_status} />
+            <FactRow label="LISTED GRADE" value={building.listed_grade} />
+            {building.awards && building.awards.length > 0 && (
+              <div style={{ paddingTop: "8px" }}>
+                {building.awards.map((a, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: "20px", padding: "14px 0", borderBottom: "1px solid var(--border-dim)" }}>
+                    <div style={{ fontSize: "9px", letterSpacing: "0.12em", color: "var(--text-dim)", paddingTop: "1px" }}>
+                      {a.year ?? "AWARD"}
+                    </div>
+                    <div style={{ fontSize: "12px", letterSpacing: "0.03em", color: "var(--text)", fontWeight: 300 }}>
+                      {a.name}
+                      {a.organization && <span style={{ color: "var(--text-dim)", fontSize: "10px" }}> — {a.organization}</span>}
+                    </div>
                   </div>
                 ))}
-            </div>
+              </div>
+            )}
 
             {/* Sources */}
             {building.sources && building.sources.length > 0 && (
-              <div style={{ marginTop: "40px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "0.2em", color: "var(--text-dim)", marginBottom: "16px" }}>SOURCES</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <>
+                <SectionHeader title="SOURCES" />
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", paddingTop: "8px" }}>
                   {building.sources.map((s, i) => (
                     <div key={i}>
                       {s.url ? (
@@ -118,25 +152,21 @@ export default async function BuildingPage({
                     </div>
                   ))}
                 </div>
-              </div>
+              </>
             )}
 
             {/* External links */}
-            <div style={{ marginTop: "32px", display: "flex", gap: "12px" }}>
+            <div style={{ marginTop: "32px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
               {building.wikidata_id && (
-                <a href={`https://www.wikidata.org/wiki/${building.wikidata_id}`} target="_blank" rel="noreferrer" style={externalLinkStyle}>
-                  WIKIDATA ↗
-                </a>
+                <a href={`https://www.wikidata.org/wiki/${building.wikidata_id}`} target="_blank" rel="noreferrer" style={externalLinkStyle}>WIKIDATA ↗</a>
               )}
               {building.osm_id && (
-                <a href={`https://www.openstreetmap.org/${building.osm_id}`} target="_blank" rel="noreferrer" style={externalLinkStyle}>
-                  OPENSTREETMAP ↗
-                </a>
+                <a href={`https://www.openstreetmap.org/${building.osm_id}`} target="_blank" rel="noreferrer" style={externalLinkStyle}>OPENSTREETMAP ↗</a>
               )}
             </div>
           </div>
 
-          {/* Right: Map */}
+          {/* Right: Map + nearby */}
           <div>
             <div style={{ fontSize: "9px", letterSpacing: "0.2em", color: "var(--text-dim)", marginBottom: "24px" }}>LOCATION</div>
             {building.lat !== 0 && building.lng !== 0 ? (
@@ -149,23 +179,6 @@ export default async function BuildingPage({
             ) : (
               <div style={{ height: "360px", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", letterSpacing: "0.15em", color: "var(--text-dim)" }}>
                 NO COORDINATES
-              </div>
-            )}
-
-            {nearby.length > 0 && (
-              <div style={{ marginTop: "32px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "0.2em", color: "var(--text-dim)", marginBottom: "16px" }}>NEARBY</div>
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  {nearby.map((b) => (
-                    <Link
-                      key={b.id}
-                      href={`/building/${b.id}`}
-                      style={{ display: "block", padding: "12px 0", borderBottom: "1px solid var(--border-dim)", textDecoration: "none", color: "var(--text)", fontSize: "11px", letterSpacing: "0.04em" }}
-                    >
-                      {b.name ?? b.address}
-                    </Link>
-                  ))}
-                </div>
               </div>
             )}
           </div>
@@ -209,10 +222,7 @@ export default async function BuildingPage({
               Know something we don&apos;t? Edit this record.
             </div>
           </div>
-          <Link
-            href={`/building/${building.id}/edit`}
-            style={{ fontSize: "10px", letterSpacing: "0.12em", padding: "12px 28px", border: "1px solid var(--border)", color: "var(--text)", textDecoration: "none", display: "inline-block" }}
-          >
+          <Link href={`/building/${building.id}/edit`} style={{ fontSize: "10px", letterSpacing: "0.12em", padding: "12px 28px", border: "1px solid var(--border)", color: "var(--text)", textDecoration: "none", display: "inline-block" }}>
             EDIT RECORD
           </Link>
         </div>

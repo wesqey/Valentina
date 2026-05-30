@@ -42,6 +42,7 @@ export default function BuildingMap({
         zoom: 16,
         zoomControl: true,
         attributionControl: true,
+        scrollWheelZoom: false,
       });
 
       mapInstanceRef.current = map;
