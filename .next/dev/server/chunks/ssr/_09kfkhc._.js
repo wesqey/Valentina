@@ -16,42 +16,21 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 ;
 ;
 async function searchByName(query) {
-    const sparql = `
-    SELECT DISTINCT ?item ?itemLabel ?architectLabel ?inceptionDate ?description WHERE {
-      ?item wdt:P31/wdt:P279* wd:Q41176.
-      ?item rdfs:label ?label.
-      FILTER(CONTAINS(LCASE(?label), LCASE("${query.replace(/"/g, "")}")))
-      FILTER(LANG(?label) = "en")
-      OPTIONAL { ?item wdt:P84 ?architect. }
-      OPTIONAL { ?item wdt:P571 ?inceptionDate. }
-      OPTIONAL {
-        ?item schema:description ?description.
-        FILTER(LANG(?description) = "en")
-      }
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-    }
-    LIMIT 12
-  `;
-    const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`;
+    const url = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&type=item&limit=15&format=json&origin=*`;
     const res = await fetch(url, {
         headers: {
-            Accept: "application/sparql-results+json",
             "User-Agent": "ValentinaArchitectureArchive/1.0"
         }
     });
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.results?.bindings ?? []).map((b)=>{
-        const year = b.inceptionDate?.value ? parseInt(b.inceptionDate.value.substring(0, 4)) : null;
-        const id = b.item?.value?.split("/").pop() ?? "";
-        return {
-            wikidataId: id,
-            name: b.itemLabel?.value ?? id,
-            description: b.description?.value ?? null,
-            architect: b.architectLabel?.value ?? null,
-            year: isNaN(year) ? null : year
-        };
-    });
+    return (data.search ?? []).map((item)=>({
+            wikidataId: item.id,
+            name: item.label ?? item.id,
+            description: item.description ?? null,
+            architect: null,
+            year: null
+        }));
 }
 async function searchByAddress(query) {
     const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`, {
@@ -63,13 +42,14 @@ async function searchByAddress(query) {
     const geoData = await geoRes.json();
     if (!geoData.length) return [];
     const { lat, lon } = geoData[0];
-    const delta = 0.005;
     const sparql = `
-    SELECT DISTINCT ?item ?itemLabel ?architectLabel ?inceptionDate ?description ?coords WHERE {
+    SELECT DISTINCT ?item ?itemLabel ?architectLabel ?inceptionDate ?description WHERE {
+      SERVICE wikibase:around {
+        ?item wdt:P625 ?coords.
+        bd:serviceParam wikibase:center "Point(${lon} ${lat})"^^geo:wktLiteral.
+        bd:serviceParam wikibase:radius "1".
+      }
       ?item wdt:P31/wdt:P279* wd:Q41176.
-      ?item wdt:P625 ?coords.
-      FILTER(?coords > "Point(${parseFloat(lon) - delta} ${parseFloat(lat) - delta})"^^geo:wktLiteral)
-      FILTER(?coords < "Point(${parseFloat(lon) + delta} ${parseFloat(lat) + delta})"^^geo:wktLiteral)
       OPTIONAL { ?item wdt:P84 ?architect. }
       OPTIONAL { ?item wdt:P571 ?inceptionDate. }
       OPTIONAL {
@@ -81,25 +61,29 @@ async function searchByAddress(query) {
     LIMIT 12
   `;
     const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`;
-    const res = await fetch(url, {
-        headers: {
-            Accept: "application/sparql-results+json",
-            "User-Agent": "ValentinaArchitectureArchive/1.0"
-        }
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.results?.bindings ?? []).map((b)=>{
-        const year = b.inceptionDate?.value ? parseInt(b.inceptionDate.value.substring(0, 4)) : null;
-        const id = b.item?.value?.split("/").pop() ?? "";
-        return {
-            wikidataId: id,
-            name: b.itemLabel?.value ?? id,
-            description: b.description?.value ?? null,
-            architect: b.architectLabel?.value ?? null,
-            year: isNaN(year) ? null : year
-        };
-    });
+    try {
+        const res = await fetch(url, {
+            headers: {
+                Accept: "application/sparql-results+json",
+                "User-Agent": "ValentinaArchitectureArchive/1.0"
+            }
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results?.bindings ?? []).map((b)=>{
+            const year = b.inceptionDate?.value ? parseInt(b.inceptionDate.value.substring(0, 4)) : null;
+            const id = b.item?.value?.split("/").pop() ?? "";
+            return {
+                wikidataId: id,
+                name: b.itemLabel?.value ?? id,
+                description: b.description?.value ?? null,
+                architect: b.architectLabel?.value ?? null,
+                year: isNaN(year) ? null : year
+            };
+        });
+    } catch  {
+        return [];
+    }
 }
 function SearchResults() {
     const searchParams = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useSearchParams"])();
@@ -160,7 +144,6 @@ function SearchResults() {
                             name: "q",
                             defaultValue: query,
                             placeholder: "ADDRESS, ARCHITECT, OR BUILDING NAME",
-                            autoFocus: true,
                             style: {
                                 flex: 1,
                                 fontSize: "11px",
@@ -174,7 +157,7 @@ function SearchResults() {
                             }
                         }, void 0, false, {
                             fileName: "[project]/app/search/SearchResults.tsx",
-                            lineNumber: 106,
+                            lineNumber: 121,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -193,18 +176,18 @@ function SearchResults() {
                             children: "SEARCH"
                         }, void 0, false, {
                             fileName: "[project]/app/search/SearchResults.tsx",
-                            lineNumber: 107,
+                            lineNumber: 137,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/search/SearchResults.tsx",
-                    lineNumber: 105,
+                    lineNumber: 113,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/app/search/SearchResults.tsx",
-                lineNumber: 104,
+                lineNumber: 112,
                 columnNumber: 7
             }, this),
             query && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -217,7 +200,7 @@ function SearchResults() {
                 children: loading ? `SEARCHING FOR "${query.toUpperCase()}"...` : `${results.length} RESULT${results.length !== 1 ? "S" : ""} FOR "${query.toUpperCase()}" — ${mode === "address" ? "NEAR THIS ADDRESS" : "BY NAME"}`
             }, void 0, false, {
                 fileName: "[project]/app/search/SearchResults.tsx",
-                lineNumber: 112,
+                lineNumber: 157,
                 columnNumber: 9
             }, this),
             loading && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -246,7 +229,7 @@ function SearchResults() {
                                 }
                             }, void 0, false, {
                                 fileName: "[project]/app/search/SearchResults.tsx",
-                                lineNumber: 121,
+                                lineNumber: 168,
                                 columnNumber: 15
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -257,18 +240,18 @@ function SearchResults() {
                                 }
                             }, void 0, false, {
                                 fileName: "[project]/app/search/SearchResults.tsx",
-                                lineNumber: 122,
+                                lineNumber: 169,
                                 columnNumber: 15
                             }, this)
                         ]
                     }, i, true, {
                         fileName: "[project]/app/search/SearchResults.tsx",
-                        lineNumber: 120,
+                        lineNumber: 167,
                         columnNumber: 13
                     }, this))
             }, void 0, false, {
                 fileName: "[project]/app/search/SearchResults.tsx",
-                lineNumber: 118,
+                lineNumber: 165,
                 columnNumber: 9
             }, this),
             !loading && results.length === 0 && query && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -281,7 +264,7 @@ function SearchResults() {
                 children: "NO BUILDINGS FOUND — TRY A DIFFERENT NAME OR ADDRESS"
             }, void 0, false, {
                 fileName: "[project]/app/search/SearchResults.tsx",
-                lineNumber: 129,
+                lineNumber: 176,
                 columnNumber: 9
             }, this),
             !loading && results.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -326,7 +309,7 @@ function SearchResults() {
                                             children: r.name
                                         }, void 0, false, {
                                             fileName: "[project]/app/search/SearchResults.tsx",
-                                            lineNumber: 144,
+                                            lineNumber: 200,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -343,33 +326,33 @@ function SearchResults() {
                                                     children: r.architect
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/search/SearchResults.tsx",
-                                                    lineNumber: 146,
+                                                    lineNumber: 204,
                                                     columnNumber: 37
                                                 }, this),
                                                 r.year && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                     children: r.year
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/search/SearchResults.tsx",
-                                                    lineNumber: 147,
+                                                    lineNumber: 205,
                                                     columnNumber: 32
                                                 }, this),
                                                 r.description && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                     children: r.description
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/search/SearchResults.tsx",
-                                                    lineNumber: 148,
+                                                    lineNumber: 206,
                                                     columnNumber: 39
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/app/search/SearchResults.tsx",
-                                            lineNumber: 145,
+                                            lineNumber: 203,
                                             columnNumber: 19
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/search/SearchResults.tsx",
-                                    lineNumber: 143,
+                                    lineNumber: 199,
                                     columnNumber: 17
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -385,29 +368,29 @@ function SearchResults() {
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/search/SearchResults.tsx",
-                                    lineNumber: 151,
+                                    lineNumber: 209,
                                     columnNumber: 17
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/search/SearchResults.tsx",
-                            lineNumber: 142,
+                            lineNumber: 198,
                             columnNumber: 15
                         }, this)
                     }, r.wikidataId, false, {
                         fileName: "[project]/app/search/SearchResults.tsx",
-                        lineNumber: 137,
+                        lineNumber: 184,
                         columnNumber: 13
                     }, this))
             }, void 0, false, {
                 fileName: "[project]/app/search/SearchResults.tsx",
-                lineNumber: 135,
+                lineNumber: 182,
                 columnNumber: 9
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/app/search/SearchResults.tsx",
-        lineNumber: 103,
+        lineNumber: 111,
         columnNumber: 5
     }, this);
 }
