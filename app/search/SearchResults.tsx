@@ -5,75 +5,51 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 interface SearchResult {
-  wikidataId: string;
+  wikidataId: string | null;
   name: string;
   description: string | null;
   architect: string | null;
   year: number | null;
+  address: string | null;
+  source: "wikidata" | "osm";
 }
 
 async function searchByName(query: string): Promise<SearchResult[]> {
-  // First get candidates from entity search API
   const url = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&type=item&limit=20&format=json&origin=*`;
   const res = await fetch(url, { headers: { "User-Agent": "ValentinaArchitectureArchive/1.0" } });
   if (!res.ok) return [];
   const data = await res.json();
-  const candidates: string[] = (data.search ?? []).map((item: { id: string }) => item.id);
+  const candidates: Array<{ id: string; label?: string; description?: string }> = data.search ?? [];
   if (!candidates.length) return [];
 
-  // Then filter via SPARQL to only keep architectural items
-  const values = candidates.map((id) => `wd:${id}`).join(" ");
-  const sparql = `
-    SELECT DISTINCT ?item ?itemLabel ?architectLabel ?inceptionDate ?description WHERE {
-      VALUES ?item { ${values} }
-      ?item wdt:P31/wdt:P279* ?type.
-      VALUES ?type {
-        wd:Q41176   # building
-        wd:Q4989906 # monument
-        wd:Q12518   # tower
-        wd:Q16560   # palace
-        wd:Q24398318 # religious building
-        wd:Q1529   # cathedral
-        wd:Q16831714 # museum building
-        wd:Q33506   # museum
-        wd:Q17350442 # vernacular architecture
-        wd:Q811979  # architectural structure
-        wd:Q55488   # railway station
-        wd:Q571     # book (exclude)
-      }
-      FILTER(?type != wd:Q571)
-      OPTIONAL { ?item wdt:P84 ?architect. }
-      OPTIONAL { ?item wdt:P571 ?inceptionDate. }
-      OPTIONAL {
-        ?item schema:description ?description.
-        FILTER(LANG(?description) = "en")
-      }
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-    }
-    LIMIT 12
-  `;
+  const architecturalKeywords = [
+    "building", "structure", "architecture", "monument", "tower", "bridge",
+    "cathedral", "church", "temple", "mosque", "synagogue", "palace",
+    "museum", "library", "stadium", "skyscraper", "house", "villa", "castle",
+    "office", "station", "airport", "hospital", "school", "university",
+    "hall", "theater", "theatre", "opera", "arena", "garden", "memorial",
+    "landmark", "historic", "complex", "center", "centre", "plaza", "square",
+    "chapel", "abbey", "basilica", "fort", "lighthouse", "observatory",
+    "pavilion", "warehouse", "factory", "mill", "barn", "cottage",
+  ];
 
-  const sparqlUrl = `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`;
-  try {
-    const sparqlRes = await fetch(sparqlUrl, {
-      headers: { Accept: "application/sparql-results+json", "User-Agent": "ValentinaArchitectureArchive/1.0" },
-    });
-    if (!sparqlRes.ok) return [];
-    const sparqlData = await sparqlRes.json();
-    return (sparqlData.results?.bindings ?? []).map((b: Record<string, { value: string }>) => {
-      const year = b.inceptionDate?.value ? parseInt(b.inceptionDate.value.substring(0, 4)) : null;
-      const id = b.item?.value?.split("/").pop() ?? "";
-      return {
-        wikidataId: id,
-        name: b.itemLabel?.value ?? id,
-        description: b.description?.value ?? null,
-        architect: b.architectLabel?.value ?? null,
-        year: isNaN(year as number) ? null : year,
-      };
-    });
-  } catch {
-    return [];
-  }
+  const filtered = candidates.filter((item) => {
+    const desc = (item.description ?? "").toLowerCase();
+    const label = (item.label ?? "").toLowerCase();
+    return architecturalKeywords.some((kw) => desc.includes(kw) || label.includes(kw));
+  });
+
+  const results = filtered.length > 0 ? filtered : candidates.slice(0, 8);
+
+  return results.slice(0, 12).map((item) => ({
+    wikidataId: item.id,
+    name: item.label ?? item.id,
+    description: item.description ?? null,
+    architect: null,
+    year: null,
+    address: null,
+    source: "wikidata" as const,
+  }));
 }
 
 async function searchByAddress(query: string): Promise<SearchResult[]> {
@@ -84,7 +60,6 @@ async function searchByAddress(query: string): Promise<SearchResult[]> {
   if (!geoRes.ok) return [];
   const geoData = await geoRes.json();
   if (!geoData.length) return [];
-
   const { lat, lon } = geoData[0];
 
   const sparql = `
@@ -92,9 +67,9 @@ async function searchByAddress(query: string): Promise<SearchResult[]> {
       SERVICE wikibase:around {
         ?item wdt:P625 ?coords.
         bd:serviceParam wikibase:center "Point(${lon} ${lat})"^^geo:wktLiteral.
-        bd:serviceParam wikibase:radius "1".
+        bd:serviceParam wikibase:radius "0.5".
       }
-      ?item wdt:P31/wdt:P279* wd:Q41176.
+      ?item wdt:P31/wdt:P279* wd:Q811979.
       OPTIONAL { ?item wdt:P84 ?architect. }
       OPTIONAL { ?item wdt:P571 ?inceptionDate. }
       OPTIONAL {
@@ -103,27 +78,65 @@ async function searchByAddress(query: string): Promise<SearchResult[]> {
       }
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
     }
-    LIMIT 12
+    LIMIT 10
   `;
 
-  const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`;
+  const sparqlUrl = `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`;
   try {
-    const res = await fetch(url, {
+    const sparqlRes = await fetch(sparqlUrl, {
       headers: { Accept: "application/sparql-results+json", "User-Agent": "ValentinaArchitectureArchive/1.0" },
     });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.results?.bindings ?? []).map((b: Record<string, { value: string }>) => {
-      const year = b.inceptionDate?.value ? parseInt(b.inceptionDate.value.substring(0, 4)) : null;
-      const id = b.item?.value?.split("/").pop() ?? "";
-      return {
-        wikidataId: id,
-        name: b.itemLabel?.value ?? id,
-        description: b.description?.value ?? null,
-        architect: b.architectLabel?.value ?? null,
-        year: isNaN(year as number) ? null : year,
-      };
+    if (sparqlRes.ok) {
+      const sparqlData = await sparqlRes.json();
+      const wikidataResults: SearchResult[] = (sparqlData.results?.bindings ?? []).map((b: Record<string, { value: string }>) => {
+        const year = b.inceptionDate?.value ? parseInt(b.inceptionDate.value.substring(0, 4)) : null;
+        const id = b.item?.value?.split("/").pop() ?? "";
+        return {
+          wikidataId: id,
+          name: b.itemLabel?.value ?? id,
+          description: b.description?.value ?? null,
+          architect: b.architectLabel?.value ?? null,
+          year: isNaN(year as number) ? null : year,
+          address: null,
+          source: "wikidata" as const,
+        };
+      });
+      if (wikidataResults.length > 0) return wikidataResults;
+    }
+  } catch { /* fall through to OSM */ }
+
+  const delta = 0.003;
+  const overpassQuery = `
+    [out:json][timeout:10];
+    (
+      way["building"](${parseFloat(lat) - delta},${parseFloat(lon) - delta},${parseFloat(lat) + delta},${parseFloat(lon) + delta});
+      way["historic"](${parseFloat(lat) - delta},${parseFloat(lon) - delta},${parseFloat(lat) + delta},${parseFloat(lon) + delta});
+      relation["building"](${parseFloat(lat) - delta},${parseFloat(lon) - delta},${parseFloat(lat) + delta},${parseFloat(lon) + delta});
+    );
+    out tags center 10;
+  `;
+
+  try {
+    const overpassRes = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      body: `data=${encodeURIComponent(overpassQuery)}`,
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "ValentinaArchitectureArchive/1.0" },
     });
+    if (!overpassRes.ok) return [];
+    const overpassData = await overpassRes.json();
+
+    return (overpassData.elements ?? [])
+      .filter((el: { tags?: Record<string, string> }) => el.tags?.name)
+      .slice(0, 10)
+      .map((el: { id: number; tags?: Record<string, string> }) => ({
+        wikidataId: el.tags?.wikidata ?? null,
+        name: el.tags?.name ?? "Unnamed Building",
+        description: el.tags?.["building:use"] ?? el.tags?.historic ?? el.tags?.building ?? null,
+        architect: el.tags?.architect ?? null,
+        year: el.tags?.["start_date"] ? parseInt(el.tags["start_date"]) : null,
+        address: [el.tags?.["addr:housenumber"], el.tags?.["addr:street"]].filter(Boolean).join(" ") || null,
+        source: "osm" as const,
+      }));
   } catch {
     return [];
   }
@@ -172,31 +185,11 @@ export default function SearchResults() {
             name="q"
             defaultValue={query}
             placeholder="ADDRESS, ARCHITECT, OR BUILDING NAME"
-            style={{
-              flex: 1,
-              fontSize: "11px",
-              letterSpacing: "0.08em",
-              padding: "18px 20px",
-              background: "none",
-              border: "none",
-              outline: "none",
-              color: "var(--text)",
-              fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-            }}
+            style={{ flex: 1, fontSize: "11px", letterSpacing: "0.08em", padding: "18px 20px", background: "none", border: "none", outline: "none", color: "var(--text)", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
           />
           <button
             type="submit"
-            style={{
-              fontSize: "10px",
-              letterSpacing: "0.1em",
-              padding: "18px 24px",
-              background: "none",
-              border: "none",
-              borderLeft: "1px solid var(--border)",
-              cursor: "pointer",
-              color: "var(--text)",
-              fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-            }}
+            style={{ fontSize: "10px", letterSpacing: "0.1em", padding: "18px 24px", background: "none", border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer", color: "var(--text)", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
           >
             SEARCH
           </button>
@@ -230,34 +223,26 @@ export default function SearchResults() {
 
       {!loading && results.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column" }}>
-          {results.map((r) => (
+          {results.map((r, i) => (
             <Link
-              key={r.wikidataId}
-              href={`/building/${r.wikidataId}`}
-              style={{
-                display: "block",
-                padding: "24px 0",
-                borderBottom: "1px solid var(--border-dim)",
-                textDecoration: "none",
-                color: "var(--text)",
-                transition: "opacity 0.2s",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.6"; }}
+              key={r.wikidataId ?? `osm-${i}`}
+              href={r.wikidataId ? `/building/${r.wikidataId}` : "#"}
+              style={{ display: "block", padding: "24px 0", borderBottom: "1px solid var(--border-dim)", textDecoration: "none", color: "var(--text)", transition: "opacity 0.2s", cursor: r.wikidataId ? "pointer" : "default" }}
+              onMouseEnter={(e) => { if (r.wikidataId) (e.currentTarget as HTMLElement).style.opacity = "0.6"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "40px", flexWrap: "wrap" }}>
                 <div>
-                  <div style={{ fontSize: "15px", fontWeight: 300, letterSpacing: "0.05em", marginBottom: "8px" }}>
-                    {r.name}
-                  </div>
+                  <div style={{ fontSize: "15px", fontWeight: 300, letterSpacing: "0.05em", marginBottom: "8px" }}>{r.name}</div>
                   <div style={{ fontSize: "9px", letterSpacing: "0.12em", color: "var(--text-dim)", display: "flex", gap: "16px", flexWrap: "wrap" }}>
                     {r.architect && <span>{r.architect}</span>}
-                    {r.year && <span>{r.year}</span>}
+                    {r.year && !isNaN(r.year) && <span>{r.year}</span>}
+                    {r.address && <span>{r.address}</span>}
                     {r.description && <span>{r.description}</span>}
                   </div>
                 </div>
                 <div style={{ fontSize: "9px", letterSpacing: "0.1em", color: "var(--text-dim)", flexShrink: 0 }}>
-                  {r.wikidataId} →
+                  {r.source === "osm" ? "OSM" : r.wikidataId} {r.wikidataId ? "→" : "· NO DETAIL PAGE YET"}
                 </div>
               </div>
             </Link>
