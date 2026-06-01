@@ -13,17 +13,67 @@ interface SearchResult {
 }
 
 async function searchByName(query: string): Promise<SearchResult[]> {
-  const url = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&type=item&limit=15&format=json&origin=*`;
+  // First get candidates from entity search API
+  const url = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&type=item&limit=20&format=json&origin=*`;
   const res = await fetch(url, { headers: { "User-Agent": "ValentinaArchitectureArchive/1.0" } });
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.search ?? []).map((item: { id: string; label?: string; description?: string }) => ({
-    wikidataId: item.id,
-    name: item.label ?? item.id,
-    description: item.description ?? null,
-    architect: null,
-    year: null,
-  }));
+  const candidates: string[] = (data.search ?? []).map((item: { id: string }) => item.id);
+  if (!candidates.length) return [];
+
+  // Then filter via SPARQL to only keep architectural items
+  const values = candidates.map((id) => `wd:${id}`).join(" ");
+  const sparql = `
+    SELECT DISTINCT ?item ?itemLabel ?architectLabel ?inceptionDate ?description WHERE {
+      VALUES ?item { ${values} }
+      ?item wdt:P31/wdt:P279* ?type.
+      VALUES ?type {
+        wd:Q41176   # building
+        wd:Q4989906 # monument
+        wd:Q12518   # tower
+        wd:Q16560   # palace
+        wd:Q24398318 # religious building
+        wd:Q1529   # cathedral
+        wd:Q16831714 # museum building
+        wd:Q33506   # museum
+        wd:Q17350442 # vernacular architecture
+        wd:Q811979  # architectural structure
+        wd:Q55488   # railway station
+        wd:Q571     # book (exclude)
+      }
+      FILTER(?type != wd:Q571)
+      OPTIONAL { ?item wdt:P84 ?architect. }
+      OPTIONAL { ?item wdt:P571 ?inceptionDate. }
+      OPTIONAL {
+        ?item schema:description ?description.
+        FILTER(LANG(?description) = "en")
+      }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+    }
+    LIMIT 12
+  `;
+
+  const sparqlUrl = `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`;
+  try {
+    const sparqlRes = await fetch(sparqlUrl, {
+      headers: { Accept: "application/sparql-results+json", "User-Agent": "ValentinaArchitectureArchive/1.0" },
+    });
+    if (!sparqlRes.ok) return [];
+    const sparqlData = await sparqlRes.json();
+    return (sparqlData.results?.bindings ?? []).map((b: Record<string, { value: string }>) => {
+      const year = b.inceptionDate?.value ? parseInt(b.inceptionDate.value.substring(0, 4)) : null;
+      const id = b.item?.value?.split("/").pop() ?? "";
+      return {
+        wikidataId: id,
+        name: b.itemLabel?.value ?? id,
+        description: b.description?.value ?? null,
+        architect: b.architectLabel?.value ?? null,
+        year: isNaN(year as number) ? null : year,
+      };
+    });
+  } catch {
+    return [];
+  }
 }
 
 async function searchByAddress(query: string): Promise<SearchResult[]> {
