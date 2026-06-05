@@ -14,6 +14,7 @@ interface SearchResult {
   source: "wikidata" | "osm";
 }
 
+// Name search — entity API then SPARQL filter (lightweight, no deep traversal)
 async function searchByName(query: string): Promise<SearchResult[]> {
   const url = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&type=item&limit=20&format=json&origin=*`;
   const res = await fetch(url, { headers: { "User-Agent": "ValentinaArchitectureArchive/1.0" } });
@@ -22,6 +23,8 @@ async function searchByName(query: string): Promise<SearchResult[]> {
   const candidates: Array<{ id: string; label?: string; description?: string }> = data.search ?? [];
   if (!candidates.length) return [];
 
+  // Filter: keep only items whose description contains architectural keywords
+  // This is instant (no SPARQL) and good enough for name search
   const architecturalKeywords = [
     "building", "structure", "architecture", "monument", "tower", "bridge",
     "cathedral", "church", "temple", "mosque", "synagogue", "palace",
@@ -39,6 +42,7 @@ async function searchByName(query: string): Promise<SearchResult[]> {
     return architecturalKeywords.some((kw) => desc.includes(kw) || label.includes(kw));
   });
 
+  // If filtering leaves nothing, fall back to top 8 unfiltered (better than empty)
   const results = filtered.length > 0 ? filtered : candidates.slice(0, 8);
 
   return results.slice(0, 12).map((item) => ({
@@ -52,7 +56,9 @@ async function searchByName(query: string): Promise<SearchResult[]> {
   }));
 }
 
+// Address search — Wikidata first, then Overpass OSM fallback
 async function searchByAddress(query: string): Promise<SearchResult[]> {
+  // Geocode with Nominatim
   const geoRes = await fetch(
     `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
     { headers: { "User-Agent": "ValentinaArchitectureArchive/1.0" } }
@@ -62,6 +68,7 @@ async function searchByAddress(query: string): Promise<SearchResult[]> {
   if (!geoData.length) return [];
   const { lat, lon } = geoData[0];
 
+  // Try Wikidata nearby first
   const sparql = `
     SELECT DISTINCT ?item ?itemLabel ?architectLabel ?inceptionDate ?description WHERE {
       SERVICE wikibase:around {
@@ -105,7 +112,8 @@ async function searchByAddress(query: string): Promise<SearchResult[]> {
     }
   } catch { /* fall through to OSM */ }
 
-  const delta = 0.003;
+  // Overpass fallback — find buildings near these coords
+  const delta = 0.003; // ~300m
   const overpassQuery = `
     [out:json][timeout:10];
     (
@@ -128,7 +136,7 @@ async function searchByAddress(query: string): Promise<SearchResult[]> {
     return (overpassData.elements ?? [])
       .filter((el: { tags?: Record<string, string> }) => el.tags?.name)
       .slice(0, 10)
-      .map((el: { id: number; tags?: Record<string, string> }) => ({
+      .map((el: { id: number; tags?: Record<string, string>; center?: { lat: number; lon: number } }) => ({
         wikidataId: el.tags?.wikidata ?? null,
         name: el.tags?.name ?? "Unnamed Building",
         description: el.tags?.["building:use"] ?? el.tags?.historic ?? el.tags?.building ?? null,
@@ -187,10 +195,7 @@ export default function SearchResults() {
             placeholder="ADDRESS, ARCHITECT, OR BUILDING NAME"
             style={{ flex: 1, fontSize: "11px", letterSpacing: "0.08em", padding: "18px 20px", background: "none", border: "none", outline: "none", color: "var(--text)", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
           />
-          <button
-            type="submit"
-            style={{ fontSize: "10px", letterSpacing: "0.1em", padding: "18px 24px", background: "none", border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer", color: "var(--text)", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
-          >
+          <button type="submit" style={{ fontSize: "10px", letterSpacing: "0.1em", padding: "18px 24px", background: "none", border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer", color: "var(--text)", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
             SEARCH
           </button>
         </form>
@@ -226,7 +231,7 @@ export default function SearchResults() {
           {results.map((r, i) => (
             <Link
               key={r.wikidataId ?? `osm-${i}`}
-              href={r.wikidataId ? `/building/${r.wikidataId}` : "#"}
+              href={r.wikidataId ? `/building/${r.wikidataId}` : r.source === "osm" && r.address ? `/address?q=${encodeURIComponent(r.address)}` : "#"}
               style={{ display: "block", padding: "24px 0", borderBottom: "1px solid var(--border-dim)", textDecoration: "none", color: "var(--text)", transition: "opacity 0.2s", cursor: r.wikidataId ? "pointer" : "default" }}
               onMouseEnter={(e) => { if (r.wikidataId) (e.currentTarget as HTMLElement).style.opacity = "0.6"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}

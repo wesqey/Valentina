@@ -45,14 +45,28 @@ export default function HomePage() {
               onBlur={() => setFocused(false)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && query.trim()) {
-                  window.location.href = `/search?q=${encodeURIComponent(query)}`;
+                  const looksLikeAddress = /\d/.test(query) || query.split(",").length > 1;
+                  if (looksLikeAddress) {
+                    window.location.href = `/address?q=${encodeURIComponent(query)}`;
+                  } else {
+                    window.location.href = `/search?q=${encodeURIComponent(query)}`;
+                  }
                 }
               }}
               placeholder="375 PARK AVENUE, NEW YORK — OR — FALLINGWATER"
               style={{ flex: 1, fontSize: "11px", letterSpacing: "0.08em", padding: "20px 24px", background: "none", border: "none", outline: "none", color: "var(--text)", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
             />
             <button
-              onClick={() => { if (query.trim()) window.location.href = `/search?q=${encodeURIComponent(query)}`; }}
+              onClick={() => {
+                if (query.trim()) {
+                  const looksLikeAddress = /\d/.test(query) || query.split(",").length > 1;
+                  if (looksLikeAddress) {
+                    window.location.href = `/address?q=${encodeURIComponent(query)}`;
+                  } else {
+                    window.location.href = `/search?q=${encodeURIComponent(query)}`;
+                  }
+                }
+              }}
               style={{ fontSize: "10px", letterSpacing: "0.1em", padding: "20px 28px", background: "none", border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer", color: "var(--text)", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", transition: "opacity 0.2s" }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.5"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
